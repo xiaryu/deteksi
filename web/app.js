@@ -42,15 +42,24 @@ const cv = $("cv"), ctx = cv.getContext("2d"), vid = $("vid");
 let detector = null, hands = null, stream = null, facing = "user";
 let showBox = true, showHand = true;
 let vision = null, delegateUsed = "GPU", mode = "akurat";
-try { mode = localStorage.getItem("lensa-mode") || "akurat"; } catch {}
-let objs = [], handPts = [], frame = 0, lastTs = -1;
-let fpsT = performance.now(), fpsN = 0;
+// HP: pakai pengaturan ringan (model cepat, resolusi kecil, tanpa efek blur yang berat)
+const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || matchMedia("(pointer: coarse)").matches;
+const GLOW = !IS_MOBILE;                       // shadowBlur sangat lambat di canvas HP
+const OBJ_INTERVAL = IS_MOBILE ? 300 : 120;    // jeda deteksi objek (ms); tangan diproses di sela-selanya
+mode = IS_MOBILE ? "cepat" : "akurat";
+try { mode = localStorage.getItem("lensa-mode") || mode; } catch {}
+let objs = [], handPts = [], lastVidTime = -1, lastObjT = 0;
+let fpsT = performance.now(), fpsN = 0, aiN = 0;
 
 /* ================= Kamera ================= */
 async function startCam() {
   if (stream) stream.getTracks().forEach(t => t.stop());
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    stream = await navigator.mediaDevices.getUserMedia({ video: {
+      facingMode: facing,
+      width: { ideal: IS_MOBILE ? 640 : 1280 }, height: { ideal: IS_MOBILE ? 480 : 720 },
+      frameRate: { ideal: 30 }
+    }, audio: false });
   } catch (e) {
     if (e.name === "NotAllowedError") throw e;
     stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
@@ -141,13 +150,15 @@ $("start").addEventListener("click", async () => {
 function loop(now) {
   requestAnimationFrame(loop);
   const W = cv.width, H = cv.height, mirror = facing === "user";
-  frame++;
 
-  if (detector && hands && vid.readyState >= 2 && now > lastTs) {
-    lastTs = now;
+  // AI hanya diproses saat kamera mengirim frame BARU, dan cuma SATU model per frame:
+  // objek tiap OBJ_INTERVAL ms, sisanya untuk tangan. Video tetap digambar setiap frame layar.
+  if (detector && hands && vid.readyState >= 2 && vid.currentTime !== lastVidTime) {
+    lastVidTime = vid.currentTime;
     try {
-      if (frame % 2 === 0) objs = detector.detectForVideo(vid, now).detections;   // objek tiap 2 frame
-      handPts = hands.detectForVideo(vid, now).landmarks;                          // tangan tiap frame
+      if (now - lastObjT >= OBJ_INTERVAL) { objs = detector.detectForVideo(vid, now).detections; lastObjT = now; }
+      else handPts = hands.detectForVideo(vid, now).landmarks;
+      aiN++;
     } catch (e) { console.warn(e); }
   }
 
@@ -164,7 +175,8 @@ function loop(now) {
   fpsN++;
   if (now - fpsT > 500) {
     $("fps").textContent = Math.round(fpsN * 1000 / (now - fpsT));
-    fpsT = now; fpsN = 0;
+    $("aifps").textContent = Math.round(aiN * 1000 / (now - fpsT));
+    fpsT = now; fpsN = 0; aiN = 0;
     updateChips();
   }
 }
@@ -177,7 +189,7 @@ function drawBoxes(W, mirror) {
     const x = mirror ? W - b.originX - b.width : b.originX, y = b.originY, w = b.width, h = b.height;
 
     ctx.fillStyle = col + "14"; ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = col; ctx.lineWidth = 1.5 * s; ctx.shadowColor = col; ctx.shadowBlur = 10 * s;
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5 * s; ctx.shadowColor = col; ctx.shadowBlur = GLOW ? 10 * s : 0;
     ctx.strokeRect(x, y, w, h);
 
     // sudut tebal ala viewfinder
@@ -223,7 +235,9 @@ function drawHands(W, H, mirror) {
 
   for (const pts of P) TIPS.forEach((tip, i) => {          // ujung jari bercahaya
     const p = pts[tip];
-    ctx.fillStyle = TIP_COLORS[i]; ctx.shadowColor = TIP_COLORS[i]; ctx.shadowBlur = 22 * s;
+    ctx.fillStyle = TIP_COLORS[i];
+    if (GLOW) { ctx.shadowColor = TIP_COLORS[i]; ctx.shadowBlur = 22 * s; }
+    else { ctx.globalAlpha = .3; ctx.beginPath(); ctx.arc(p.x, p.y, 13 * s, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
     ctx.beginPath(); ctx.arc(p.x, p.y, 6 * s, 0, 7); ctx.fill();
   });
   ctx.shadowBlur = 0;
@@ -235,8 +249,16 @@ function neonLine(a, b, col, s, t) {
   const wob = Math.sin(t * 9) * Math.min(14, len * .03) * s;   // getar seperti senar
   const cx = mx - dy / len * wob, cy = my + dx / len * wob;
   const path = () => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(cx, cy, b.x, b.y); ctx.stroke(); };
-  ctx.shadowColor = col; ctx.shadowBlur = 25 * s; ctx.strokeStyle = col; ctx.lineWidth = 5 * s; path();
-  ctx.shadowBlur = 0; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5 * s; path();
+  if (GLOW) {
+    ctx.shadowColor = col; ctx.shadowBlur = 25 * s; ctx.strokeStyle = col; ctx.lineWidth = 5 * s; path();
+    ctx.shadowBlur = 0;
+  } else {
+    // glow murah: garis lebar transparan + garis warna, tanpa blur
+    const a = ctx.globalAlpha;
+    ctx.strokeStyle = col; ctx.globalAlpha = a * .25; ctx.lineWidth = 14 * s; path();
+    ctx.globalAlpha = a; ctx.lineWidth = 5 * s; path();
+  }
+  ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5 * s; path();
 }
 
 /* ================= UI ================= */
