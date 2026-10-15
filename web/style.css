@@ -1,0 +1,103 @@
+/* Layout: viewfinder kamera penuh + galeri foto di samping (pindah ke bawah di layar kecil) */
+:root {
+  --bg: #05070d;
+  --surface: #0c111d;
+  --fg: #e8f1ff;
+  --dim: #7d8aa6;
+  --line: rgba(232, 241, 255, .14);
+  --cyan: #3cf2ff;
+  --pink: #ff3ca8;
+  --yellow: #ffd23c;
+  --panel: rgba(8, 12, 22, .72);
+  --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font-family: var(--mono); }
+body { overflow: hidden; }
+button { font: 600 12px var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--fg);
+         background: var(--panel); border: 1px solid var(--line); padding: 9px 13px; border-radius: 3px; cursor: pointer;
+         transition: border-color .15s, color .15s, background .15s; }
+button:hover { border-color: var(--cyan); }
+button[aria-pressed="true"] { border-color: var(--cyan); color: var(--cyan); }
+button[aria-pressed="false"] { opacity: .6; }
+button:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+button:disabled { opacity: .6; cursor: wait; }
+
+/* video tetap aktif bagi browser, tapi tidak terlihat */
+video { position: fixed; top: 0; left: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
+
+/* ---------- Intro ---------- */
+#intro { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px;
+  background:
+    radial-gradient(circle at 70% 30%, rgba(60,242,255,.10), transparent 45%),
+    radial-gradient(circle at 25% 80%, rgba(255,60,168,.08), transparent 40%),
+    var(--bg); }
+#intro::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 48px 48px; mask-image: radial-gradient(circle at center, #000 20%, transparent 70%); opacity: .35; }
+.intro-box { position: relative; max-width: 500px; display: grid; gap: 18px; }
+.eyebrow { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--pink); }
+h1 { font-family: var(--display); font-size: clamp(38px, 8vw, 64px); line-height: .95; margin: 0;
+     text-transform: uppercase; letter-spacing: .03em; text-wrap: balance; }
+h1 em { font-style: normal; color: var(--cyan); text-shadow: 0 0 22px rgba(60,242,255,.7); }
+#intro p { margin: 0; color: var(--dim); line-height: 1.65; font-size: 14px; max-width: 60ch; }
+.legend { display: flex; gap: 18px; list-style: none; margin: 0; padding: 0; font-size: 12px; color: var(--dim); flex-wrap: wrap; }
+.legend li { display: flex; align-items: center; gap: 8px; }
+.legend i { width: 14px; height: 14px; border: 2px solid var(--c); box-shadow: 0 0 8px var(--c); }
+.btn-primary { justify-self: start; font-size: 14px; padding: 14px 22px; background: var(--cyan); color: var(--bg); border-color: var(--cyan); }
+.btn-primary:hover { box-shadow: 0 0 24px rgba(60,242,255,.5); }
+#msg { color: var(--pink); font-size: 13px; line-height: 1.5; min-height: 1em; }
+
+/* ---------- App ---------- */
+#app { position: fixed; inset: 0; display: grid; grid-template-columns: 1fr 240px; }
+#app.no-gallery { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.viewport { position: relative; overflow: hidden; background: #000; min-width: 0; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+#flash.on { animation: flash .45s ease-out; }
+@keyframes flash { from { opacity: .85; } to { opacity: 0; } }
+
+.hud { position: absolute; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center;
+       gap: 12px; flex-wrap: wrap; padding: 14px 16px; }
+.hud.top { top: 0; background: linear-gradient(var(--panel), transparent); }
+.hud.bottom { bottom: 0; background: linear-gradient(transparent, var(--panel)); padding-top: 40px; }
+.brand { font-family: var(--display); font-weight: 700; font-size: 20px; letter-spacing: .08em; text-transform: uppercase; }
+.brand b { color: var(--cyan); }
+.stats { display: flex; gap: 14px; align-items: center; font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; flex-wrap: wrap; }
+.stats b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.pill { padding: 3px 9px; border-radius: 99px; border: 1px solid currentColor; }
+.pill.loading { color: var(--yellow); animation: pulse 1.2s infinite; }
+.pill.ok { color: #4dff9a; }
+.pill.err { color: var(--pink); }
+@keyframes pulse { 50% { opacity: .45; } }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.chip { font-size: 12px; padding: 4px 10px; border: 1px solid var(--c); color: var(--c); border-radius: 3px; background: rgba(0,0,0,.35); }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-shot { background: var(--pink); color: #fff; border-color: var(--pink); }
+.btn-shot:hover { box-shadow: 0 0 20px rgba(255,60,168,.55); border-color: var(--pink); }
+
+/* ---------- Galeri ---------- */
+#gallery { background: var(--surface); border-left: 1px solid var(--line); padding: 18px 16px; overflow-y: auto; }
+#gallery h2 { font-family: var(--display); font-size: 15px; text-transform: uppercase; letter-spacing: .1em; margin: 0 0 4px; }
+.hint { font-size: 11px; color: var(--dim); margin: 0 0 14px; }
+.hint code { color: var(--cyan); }
+#thumbs { display: grid; gap: 10px; }
+#thumbs a { display: block; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+#thumbs a:hover { border-color: var(--cyan); }
+#thumbs img { display: block; width: 100%; }
+#thumbs .empty { font-size: 12px; color: var(--dim); line-height: 1.5; }
+
+#toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: var(--surface);
+         border: 1px solid var(--cyan); color: var(--fg); padding: 10px 16px; border-radius: 3px; font-size: 13px; z-index: 10; }
+
+@media (max-width: 800px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  #gallery { border-left: 0; border-top: 1px solid var(--line); max-height: 150px; }
+  #thumbs { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { .pill.loading, #flash.on { animation: none; } }
